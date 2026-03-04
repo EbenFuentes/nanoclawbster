@@ -455,7 +455,7 @@ async function runQuery(
         'TodoWrite', 'ToolSearch', 'Skill',
         'NotebookEdit',
         'mcp__nanoclawbster__*',
-        'mcp__composio__*',
+        ...(containerInput.isAdmin ? ['mcp__composio__*'] : []),
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
@@ -471,7 +471,7 @@ async function runQuery(
             NANOCLAWBSTER_IS_ADMIN: containerInput.isAdmin ? '1' : '0',
           },
         },
-        ...(sdkEnv.COMPOSIO_API_KEY ? {
+        ...(containerInput.isAdmin && sdkEnv.COMPOSIO_API_KEY ? {
           composio: {
             command: 'node',
             args: [path.join(path.dirname(fileURLToPath(import.meta.url)), 'composio-mcp.js')],
