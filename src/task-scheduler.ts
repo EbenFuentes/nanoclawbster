@@ -226,6 +226,12 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
           continue;
         }
 
+        // Clear next_run immediately so subsequent scheduler polls don't
+        // re-enqueue the same task while the container is still running.
+        // For cron/interval tasks, updateTaskAfterRun() will set the correct
+        // next_run after completion.
+        updateTask(currentTask.id, { next_run: null });
+
         deps.queue.enqueueTask(
           currentTask.chat_jid,
           currentTask.id,
