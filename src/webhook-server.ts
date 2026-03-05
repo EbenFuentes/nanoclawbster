@@ -32,13 +32,14 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
     const MAX_BODY = 1_048_576;
     const chunks: Buffer[] = [];
     let totalSize = 0;
+    let aborted = false;
     req.on('data', (chunk: Buffer) => {
       totalSize += chunk.length;
-      if (totalSize > MAX_BODY) { req.destroy(); res.writeHead(413); res.end('Payload too large'); return; }
+      if (totalSize > MAX_BODY && !aborted) { aborted = true; req.destroy(); res.writeHead(413); res.end('Payload too large'); return; }
       chunks.push(chunk);
     });
     req.on('end', () => {
-      if (totalSize > MAX_BODY) return; // already handled
+      if (aborted) return;
       const body = Buffer.concat(chunks);
       const sigHeader = req.headers['x-composio-signature'] as string | undefined;
       if (!verifySignature(body, secret, sigHeader)) {
@@ -61,7 +62,7 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
       try { onEvent(triggerName, data); }
       catch (err) { logger.error({ err }, 'Webhook event handler threw'); }
     });
-    req.on('error', (err) => { logger.error({ err }, 'Webhook request error'); res.writeHead(500); res.end('Error'); });
+    req.on('error', (err) => { if (!aborted) { logger.error({ err }, 'Webhook request error'); res.writeHead(500); res.end('Error'); } });
   });
   server.on('error', (err) => logger.error({ err, port }, 'Webhook server error'));
   server.listen(port, () => logger.info({ port }, 'Webhook server listening on /webhook/composio'));
