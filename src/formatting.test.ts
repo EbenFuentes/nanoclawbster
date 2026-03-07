@@ -12,8 +12,8 @@ import { NewMessage } from './types.js';
 function makeMsg(overrides: Partial<NewMessage> = {}): NewMessage {
   return {
     id: '1',
-    chat_jid: 'group@g.us',
-    sender: '123@s.whatsapp.net',
+    chat_jid: 'dc:1234567890123456',
+    sender: '288881039760293888',
     sender_name: 'Alice',
     content: 'hello',
     timestamp: '2024-01-01T00:00:00.000Z',
@@ -62,7 +62,7 @@ describe('formatMessages', () => {
     const result = formatMessages([makeMsg()]);
     expect(result).toBe(
       '<messages>\n' +
-        '<message sender="Alice" sender_id="123@s.whatsapp.net" time="2024-01-01T00:00:00.000Z">hello</message>\n' +
+        '<message sender="Alice" sender_id="288881039760293888" time="2024-01-01T00:00:00.000Z">hello</message>\n' +
         '</messages>',
     );
   });
