@@ -10,7 +10,6 @@ const envConfig = readEnvFile([
   'ASSISTANT_NAME',
   'ASSISTANT_HAS_OWN_NUMBER',
   'DISCORD_BOT_TOKEN',
-  'DISCORD_ONLY',
   'WEBHOOK_PORT',
   'COMPOSIO_WEBHOOK_SECRET',
   'COMPOSIO_WEBHOOK_URL',
@@ -77,8 +76,6 @@ export const TIMEZONE =
 // Discord configuration
 export const DISCORD_BOT_TOKEN =
   process.env.DISCORD_BOT_TOKEN || envConfig.DISCORD_BOT_TOKEN || '';
-export const DISCORD_ONLY =
-  (process.env.DISCORD_ONLY || envConfig.DISCORD_ONLY) === 'true';
 
 export const WEBHOOK_PORT: number | null = (() => {
   const raw = process.env['WEBHOOK_PORT'] ?? envConfig['WEBHOOK_PORT'] ?? '';
