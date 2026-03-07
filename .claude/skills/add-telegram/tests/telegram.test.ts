@@ -43,13 +43,11 @@ describe('telegram skill package', () => {
     const indexContent = fs.readFileSync(indexFile, 'utf-8');
     expect(indexContent).toContain('TelegramChannel');
     expect(indexContent).toContain('TELEGRAM_BOT_TOKEN');
-    expect(indexContent).toContain('TELEGRAM_ONLY');
     expect(indexContent).toContain('findChannel');
-    expect(indexContent).toContain('channels: Channel[]');
+    expect(indexContent).toContain('const channels: Channel[] = []');
 
     const configContent = fs.readFileSync(configFile, 'utf-8');
     expect(configContent).toContain('TELEGRAM_BOT_TOKEN');
-    expect(configContent).toContain('TELEGRAM_ONLY');
   });
 
   it('has intent files for modified files', () => {
@@ -88,13 +86,12 @@ describe('telegram skill package', () => {
       'utf-8',
     );
 
-    // Multi-channel architecture
+    // Discord-first multi-channel architecture: both Discord and Telegram
     expect(content).toContain('const channels: Channel[] = []');
-    expect(content).toContain('channels.push(whatsapp)');
-    expect(content).toContain('channels.push(telegram)');
+    expect(content).toContain('DiscordChannel');
+    expect(content).toContain('TelegramChannel');
 
-    // Conditional channel creation
-    expect(content).toContain('if (!TELEGRAM_ONLY)');
+    // Conditional Telegram creation (only if token configured)
     expect(content).toContain('if (TELEGRAM_BOT_TOKEN)');
 
     // Shutdown disconnects all channels
