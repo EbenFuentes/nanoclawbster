@@ -14,7 +14,6 @@ structured:
     grammy: "^1.39.3"
   env_additions:
     - TELEGRAM_BOT_TOKEN
-    - TELEGRAM_ONLY
 conflicts: []
 depends: []
 test: "npx vitest run src/channels/telegram.test.ts"
