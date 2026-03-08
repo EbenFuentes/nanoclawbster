@@ -62,6 +62,8 @@ export interface ScheduledTask {
   schedule_type: 'cron' | 'interval' | 'once';
   schedule_value: string;
   context_mode: 'group' | 'isolated';
+  /** Task type — controls host output behaviour. 'webhook' suppresses plain text output; only send_message tool calls go through. */
+  task_type?: 'standard' | 'webhook';
   next_run: string | null;
   last_run: string | null;
   last_result: string | null;
