@@ -440,13 +440,29 @@ function ensureContainerSystemRunning(): void {
 }
 
 /**
- * Check all registered groups for a restarting.flag file and send
- * "Back online!" if the flag is recent. Runs once at startup so the
- * notification fires without waiting for a user message.
+ * Runs once at startup:
+ * 1. Sends "✅ Online — N groups registered" to the admin group.
+ * 2. For any group with a recent restarting.flag, sends "✅ Back online!" instead.
  */
 async function sendRestartNotifications(): Promise<void> {
   const FIVE_MINUTES = 5 * 60 * 1000;
 
+  // Send a general startup notification to the admin group
+  const adminEntry = Object.entries(registeredGroups).find(([, g]) => g.isAdmin === true);
+  if (adminEntry) {
+    const [adminJid] = adminEntry;
+    const adminChannel = findChannel(channels, adminJid);
+    if (adminChannel) {
+      const groupCount = Object.keys(registeredGroups).length;
+      try {
+        await adminChannel.sendMessage(adminJid, `✅ Online — ${groupCount} group${groupCount !== 1 ? 's' : ''} registered`);
+      } catch (err) {
+        logger.warn({ err }, 'Failed to send startup notification');
+      }
+    }
+  }
+
+  // Check for restarting.flag files and send group-specific back-online messages
   for (const [jid, group] of Object.entries(registeredGroups)) {
     const flagPath = path.join(resolveGroupFolderPath(group.folder), 'restarting.flag');
     try {
