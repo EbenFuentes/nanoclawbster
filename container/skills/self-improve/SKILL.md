@@ -138,6 +138,8 @@ Send the PR link via `send_message`. Example:
 
 Ask the user to review and merge.
 
+**Important:** Your `send_message` here is the ONE final completion report to the user. Do NOT wrap up with additional text output after this — the host agent will stay silent and let your message stand on its own.
+
 ### 9. Deploy (After User Confirms Merge)
 
 Once the user confirms the PR is merged:
