@@ -10,55 +10,60 @@
 
 ---
 
-## What is NanoClawbster?
+# NanoClawbster
 
-NanoClawbster is inspired by [NanoClaw](https://github.com/qwibitai/NanoClaw) and adds Discord as a first-class channel, integrates [Composio](https://composio.dev) for 1000+ app connections, and is led by a lobster. Because every AI assistant deserves a crustacean mascot.
+A lightweight AI agent bot for Discord. Runs Claude agents in isolated Docker containers per conversation. Self-hostable, privacy-first.
 
-Like NanoClaw, it's a single Node.js process that routes messages to Claude agents running in isolated Linux containers. Small enough to read, secure enough to trust, weird enough to have a lobster logo.
+## Prerequisites
 
-## What's Different from NanoClaw?
+- Node.js 20+
+- Docker (or Apple Container on macOS)
+- [Claude Code](https://claude.ai/code) installed
+- A Discord bot token — create one at https://discord.com/developers/applications
+  - Enable: Message Content Intent, Server Members Intent, Presence Intent
+  - Bot permissions: Send Messages, Read Message History, Use Slash Commands
+- Either an `ANTHROPIC_API_KEY` **or** Claude Code OAuth (used for running agents)
 
-| Feature | NanoClaw | NanoClawbster |
-|---------|----------|---------------|
-| Discord channel | Via skill | Built-in |
-| Attachment vision | -- | Downloads images & files for agent access |
-| Embedded image replies | -- | Agent image URLs sent as Discord attachments |
-| Mention-only mode | -- | Bot only wakes on @mention in servers |
-| Composio MCP | -- | 1000+ app integrations out of the box |
-| Mascot | None | Lobster |
-
-## Features
-
-- **Discord + WhatsApp** - Talk to your assistant from Discord servers, DMs, or WhatsApp. Discord is built-in; WhatsApp works via Baileys.
-- **Attachment & Vision Support** - Send images or files in Discord and the agent can see and read them. Images are presented for vision; files land in the agent's workspace.
-- **Mention-Only Mode** - In Discord servers, the bot only responds to @mentions. Other messages are stored as context silently -- no typing indicator, no container spawned.
-- **Composio MCP** - Connect 1000+ apps (Gmail, Slack, GitHub, Notion, etc.) through Composio's meta-toolkit. Agents discover and use tools dynamically at runtime. Just set `COMPOSIO_API_KEY` and go.
-- **Container Isolation** - Agents run in Linux containers (Docker or Apple Container on macOS). Each group gets its own filesystem and `CLAUDE.md` memory.
-- **Scheduled Tasks** - Set up recurring jobs that run Claude and message you back.
-- **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks.
-- **Web Access** - Search and fetch content from the web.
-- **AI-Native Customization** - No config files. Tell Claude Code what you want and it modifies the code directly.
-
-## Quick Start
+## Setup
 
 ```bash
 git clone https://github.com/sskarz/nanoclawbster.git
 cd nanoclawbster
+cp .env.example .env
+# Edit .env — set DISCORD_BOT_TOKEN and optionally ANTHROPIC_API_KEY
 claude
 ```
 
-Then run `/setup`. Claude Code handles dependencies, authentication, container builds, and service configuration. The lobster takes it from there.
+Then in Claude Code, run:
+```
+/setup
+```
+
+This will:
+1. Check your environment (Node, Docker, credentials)
+2. Build the agent container image
+3. Configure and start the background service (launchd on macOS, systemd on Linux)
+4. Register your first Discord channel as the admin group
+
+## First Run
+
+Once running, invite your bot to a Discord server and send it a message. The admin group (set during `/setup`) gets a confirmation message when the bot comes online.
+
+To register additional Discord channels, message the bot in your admin channel:
+> register this channel as "my-group"
+
+## Configuration
+
+See `.env.example` for all available options with descriptions.
 
 ## Architecture
 
-```
-Discord / WhatsApp ──> SQLite ──> Polling Loop ──> Container (Claude Agent SDK) ──> Response
-                                                        │
-                                                   Composio MCP
-                                                   (1000+ apps)
-```
+- **Host process**: Node.js service that watches Discord for messages and manages agent containers
+- **Agent containers**: Isolated Docker containers running Claude via the Agents SDK — one per active conversation
+- **IPC**: JSON task files written to `/data/ipc/` for inter-process coordination
+- **Memory**: Per-group markdown files + SQLite for message history
 
-Single Node.js process. Agents execute in isolated Linux containers with filesystem isolation. Per-group message queue with concurrency control. IPC via filesystem.
+Full architecture docs in `docs/SPEC.md`.
 
 ### Admin Privileges
 
@@ -74,15 +79,12 @@ Each registered group has an `is_admin` flag in the database. Admin agents get e
 
 All agents (admin or not) have access to: `send_message`, `schedule_task`, `list_tasks`, `pause_task`, `resume_task`, `cancel_task`.
 
-Tool visibility is enforced at two levels: admin-only tools are hidden from non-admin agents' MCP tool list, and the host-side IPC handler independently rejects unauthorized requests. No agent can modify the admin flag — the database is not writable from any container.
-
 **Key files:**
 
 | File | What it does |
 |------|-------------|
 | `src/index.ts` | Orchestrator: state, message loop, agent invocation |
 | `src/channels/discord.ts` | Discord connection, mentions, attachments, embeds |
-| `src/channels/whatsapp.ts` | WhatsApp connection, auth, send/receive |
 | `src/ipc.ts` | IPC watcher and task processing |
 | `src/router.ts` | Message formatting and outbound routing |
 | `src/container-runner.ts` | Spawns agent containers with mounts |
@@ -91,52 +93,31 @@ Tool visibility is enforced at two levels: admin-only tools are hidden from non-
 | `container/agent-runner/src/composio-mcp.ts` | Composio MCP server for agent containers |
 | `groups/*/CLAUDE.md` | Per-group memory (isolated) |
 
+## Development
+
+```bash
+# TypeScript check
+npm run build
+
+# Run tests
+npm test
+
+# Run locally (no service)
+npm run dev
+```
+
 ## Usage
 
-Talk to your assistant with the trigger word (default: `@Andy`):
-
-```
-@Andy send me a summary of my GitHub PRs every morning at 9am
-@Andy review the git history for the past week and update the README if there's drift
-@Andy every Monday at 8am, compile AI news from Hacker News and message me a briefing
-```
-
-In Discord, just @mention the bot:
+In Discord, @mention the bot:
 ```
 @NanoClawbster what's on my calendar today?
-@NanoClawbster summarize the last 50 messages in this channel
+@NanoClawbster send me a summary of my GitHub PRs every morning at 9am
+@NanoClawbster every Monday at 8am, compile AI news from Hacker News and message me a briefing
 ```
-
-From your main channel, manage groups and tasks:
-```
-@Andy list all scheduled tasks across groups
-@Andy pause the Monday briefing task
-@Andy join the #general channel
-```
-
-## Customizing
-
-No config files. Just talk to Claude Code:
-
-- "Change the trigger word to @Claw"
-- "Make responses shorter and snappier"
-- "Add a custom greeting when someone says good morning"
-- "Store conversation summaries weekly"
-
-Or run `/customize` for guided changes. The codebase is small enough that Claude can safely modify it.
-
-## Requirements
-
-- macOS or Linux
-- Node.js 20+
-- [Claude Code](https://claude.ai/download)
-- [Docker](https://docker.com/products/docker-desktop) (macOS/Linux) or [Apple Container](https://github.com/apple/container) (macOS)
-- Discord bot token (for Discord) and/or WhatsApp (via QR code pairing)
-- `COMPOSIO_API_KEY` (optional, for Composio integrations)
 
 ## Credits
 
-NanoClawbster is inspired by [NanoClaw](https://github.com/qwibitai/NanoClaw) by [qwibitai](https://github.com/qwibitai). The core architecture -- container isolation, agent SDK integration, the message loop -- draws from that project. NanoClawbster adds the Discord channel, Composio MCP, and a lobster.
+NanoClawbster is inspired by [NanoClaw](https://github.com/qwibitai/NanoClaw) by [qwibitai](https://github.com/qwibitai). The core architecture — container isolation, agent SDK integration, the message loop — draws from that project. NanoClawbster adds the Discord channel, Composio MCP, and a lobster.
 
 ## License
 
