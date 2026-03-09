@@ -88,3 +88,8 @@ export const COMPOSIO_WEBHOOK_SECRET: string =
 
 export const COMPOSIO_WEBHOOK_URL: string =
   process.env['COMPOSIO_WEBHOOK_URL'] ?? envConfig['COMPOSIO_WEBHOOK_URL'] ?? '';
+
+export const MAX_SESSION_FILE_SIZE = parseInt(
+  process.env.MAX_SESSION_FILE_SIZE || '10485760',
+  10,
+); // 10MB default
