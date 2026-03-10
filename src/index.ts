@@ -559,35 +559,19 @@ async function sendRestartNotifications(): Promise<void> {
   }
 }
 
-function writeWebhookEventTask(triggerName: string, payload: unknown, adminGroup: RegisteredGroup, adminJid: string): void {
+function writeIpcTask(prefix: string, payload: Record<string, unknown>, adminGroup: RegisteredGroup, chatJid: string): void {
   const tasksDir = path.join(DATA_DIR, 'ipc', adminGroup.folder, 'tasks');
   try {
     fs.mkdirSync(tasksDir, { recursive: true });
-    const filename = `webhook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
+    const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
     fs.writeFileSync(
       path.join(tasksDir, filename),
-      JSON.stringify({ type: 'webhook_event', chatJid: adminJid, triggerName, webhookPayload: payload }),
+      JSON.stringify({ ...payload, chatJid }),
       'utf-8',
     );
-    logger.info({ filename, triggerName, adminJid }, 'Webhook event IPC task written');
+    logger.info({ filename, prefix, chatJid }, 'IPC task written');
   } catch (err) {
-    logger.error({ err }, 'Failed to write webhook event IPC task');
-  }
-}
-
-function writeRetellCallTask(event: string, call: unknown, adminGroup: RegisteredGroup, targetJid: string): void {
-  const tasksDir = path.join(DATA_DIR, 'ipc', adminGroup.folder, 'tasks');
-  try {
-    fs.mkdirSync(tasksDir, { recursive: true });
-    const filename = `retell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
-    fs.writeFileSync(
-      path.join(tasksDir, filename),
-      JSON.stringify({ type: 'retell_call', chatJid: targetJid, event, webhookPayload: call }),
-      'utf-8',
-    );
-    logger.info({ filename, event, targetJid }, 'Retell call IPC task written');
-  } catch (err) {
-    logger.error({ err }, 'Failed to write Retell call IPC task');
+    logger.error({ err, prefix }, 'Failed to write IPC task');
   }
 }
 
@@ -646,9 +630,8 @@ async function main(): Promise<void> {
     },
     registeredGroups: () => registeredGroups,
     registerGroup,
-    syncGroupMetadata: () => Promise.resolve(),
     getAvailableGroups,
-    writeGroupsSnapshot: (gf, im, ag, rj) => writeGroupsSnapshot(gf, im, ag, rj),
+    writeGroupsSnapshot,
   });
 
   // Start webhook server for proactive event notifications (Composio and/or RetellAI)
@@ -665,7 +648,7 @@ async function main(): Promise<void> {
             logger.warn('Webhook received but no admin group registered — cannot deliver notification');
             return;
           }
-          writeWebhookEventTask(triggerName, payload, adminEntry[1], adminEntry[0]);
+          writeIpcTask('webhook', { type: 'webhook_event', triggerName, webhookPayload: payload }, adminEntry[1], adminEntry[0]);
         },
       } : undefined,
       retell: {
@@ -687,7 +670,7 @@ async function main(): Promise<void> {
               logger.warn({ folder: RETELL_WEBHOOK_GROUP }, 'RETELL_WEBHOOK_GROUP folder not found, falling back to admin');
             }
           }
-          writeRetellCallTask(event, call, adminEntry[1], targetJid);
+          writeIpcTask('retell', { type: 'retell_call', event, webhookPayload: call }, adminEntry[1], targetJid);
         },
       },
     });
