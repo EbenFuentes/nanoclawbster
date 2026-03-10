@@ -579,7 +579,7 @@ describe('DiscordChannel', () => {
       expect(channel.ownsJid('dc:1234567890123456')).toBe(true);
     });
 
-    it('does not own WhatsApp group JIDs', () => {
+    it('does not own non-Discord JIDs', () => {
       const channel = new DiscordChannel('test-token', createTestOpts());
       expect(channel.ownsJid('12345@g.us')).toBe(false);
     });
