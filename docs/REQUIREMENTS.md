@@ -24,7 +24,7 @@ Instead of application-level permission systems trying to prevent agents from ac
 
 ### Built for One User
 
-This isn't a framework or a platform. It's working software for my specific needs. I use WhatsApp and Email, so it supports WhatsApp and Email. I don't use Telegram, so it doesn't support Telegram. I add the integrations I actually want, not every possible integration.
+This isn't a framework or a platform. It's working software for my specific needs. I use Discord, so it supports Discord. I add the integrations I actually want, not every possible integration.
 
 ### Customization = Code Changes
 
@@ -38,7 +38,7 @@ The codebase assumes you have an AI collaborator. It doesn't need to be excessiv
 
 ### Skills Over Features
 
-When people contribute, they shouldn't add "Telegram support alongside WhatsApp." They should contribute a skill like `/add-telegram` that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need - not a bloated system trying to support everyone's use case simultaneously.
+When people contribute, they shouldn't add "Telegram support alongside Discord." They should contribute a skill like `/add-telegram` that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need - not a bloated system trying to support everyone's use case simultaneously.
 
 ---
 
@@ -50,35 +50,34 @@ Skills we'd love contributors to build:
 Skills to add or switch to different messaging platforms:
 - `/add-telegram` - Add Telegram as an input channel
 - `/add-slack` - Add Slack as an input channel
-- `/add-discord` - Add Discord as an input channel
+- `/add-whatsapp` - Add WhatsApp as an input channel
 - `/add-sms` - Add SMS via Twilio or similar
-- `/convert-to-telegram` - Replace WhatsApp with Telegram entirely
 
 ### Container Runtime
 The project uses Docker by default (cross-platform). For macOS users who prefer Apple Container:
 - `/convert-to-apple-container` - Switch from Docker to Apple Container (macOS-only)
 
 ### Platform Support
-- `/setup-linux` - Make the full setup work on Linux (depends on Docker conversion)
 - `/setup-windows` - Windows support via WSL2 + Docker
 
 ---
 
 ## Vision
 
-A personal Claude assistant accessible via WhatsApp, with minimal custom code.
+A personal Claude assistant accessible via Discord, with minimal custom code.
 
 **Core components:**
 - **Claude Agent SDK** as the core agent
 - **Containers** for isolated agent execution (Linux VMs)
-- **WhatsApp** as the primary I/O channel
+- **Discord** as the primary I/O channel
 - **Persistent memory** per conversation and globally
 - **Scheduled tasks** that run Claude and can message back
 - **Web access** for search and browsing
 - **Browser automation** via agent-browser
+- **Phone calls** via RetellAI (outbound calls with analysis webhooks)
 
 **Implementation approach:**
-- Use existing tools (WhatsApp connector, Claude Agent SDK, MCP servers)
+- Use existing tools (Discord.js, Claude Agent SDK, MCP servers)
 - Minimal glue code
 - File-based systems where possible (CLAUDE.md for memory, folders for groups)
 
@@ -136,10 +135,11 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 
 ## Integration Points
 
-### WhatsApp
-- Using baileys library for WhatsApp Web connection
-- Messages stored in SQLite, polled by router
-- QR code authentication during setup
+### Discord
+- Using discord.js library for bot connection
+- Messages stored in SQLite
+- Bot token authentication during setup
+- Supports guild messages, DMs, typing indicators, reply context
 
 ### Scheduler
 - Built-in scheduler runs on the host, spawns containers for task execution
@@ -159,6 +159,12 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - Screenshots, PDFs, video recording
 - Authentication state persistence
 
+### Phone Calls (RetellAI)
+- Outbound voice calls via `make_phone_call` admin tool
+- Dynamic variables passed to RetellAI agent (call purpose, message)
+- Webhook receiver for `call_analyzed` events with signature verification
+- Call analysis results dispatched to configurable group via IPC
+
 ---
 
 ## Setup & Customization
@@ -170,12 +176,14 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - Each user gets a custom setup matching their exact needs
 
 ### Skills
-- `/setup` - Install dependencies, authenticate WhatsApp, configure scheduler, start services
+- `/setup` - Install dependencies, authenticate Discord bot, configure scheduler, start services
 - `/customize` - General-purpose skill for adding capabilities (new channels like Telegram, new integrations, behavior changes)
 - `/update` - Pull upstream changes, merge with customizations, run migrations
+- `/self-improve` - Write features, fix bugs, create PRs for NanoClawbster itself
+- `/debug` - Container issues, logs, troubleshooting
 
 ### Deployment
-- Runs on local Mac via launchd
+- Runs via systemd (Linux) or launchd (macOS)
 - Single Node.js process handles everything
 
 ---
@@ -187,7 +195,7 @@ These are the creator's settings, stored here for reference:
 - **Trigger**: `@Andy` (case insensitive)
 - **Response prefix**: `Andy:`
 - **Persona**: Default Claude (no custom personality)
-- **Main channel**: Self-chat (messaging yourself in WhatsApp)
+- **Main channel**: Admin Discord channel
 
 ---
 

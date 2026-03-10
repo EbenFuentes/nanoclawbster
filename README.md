@@ -20,14 +20,15 @@ A self-hosted Discord AI assistant powered by Anthropic's Claude Agent SDK. Each
 - **Containerized agents** — Each group's agent runs in an isolated Docker container (safe Bash, filesystem isolation, non-root user)
 - **Claude Agent SDK** — Built directly on Anthropic's `@anthropic-ai/claude-agent-sdk`, not a wrapper
 - **Composio integration** — 500+ app integrations out of the box (Google Calendar, Gmail, GitHub, Slack, Notion, and more)
-- **Skills system** — Extensible prompt-based skills: `self-improve`, `agent-browser`, `mcp-builder`, `daily-memory`, and more
+- **Skills system** — Extensible prompt-based skills: `self-improve`, `agent-browser`, `mcp-builder`
 - **Scheduled tasks** — Cron, interval, and one-time scheduled agents (e.g. morning briefings, weekly reports)
 - **Persistent memory** — Per-group CLAUDE.md files + SQLite for message history and sessions
 - **ask_user tool** — Agents can pause mid-task, ask you a question, and resume after your reply
 - **Self-improvement** — The bot can write its own features, open GitHub PRs, and deploy updates to itself
 - **Web browsing** — Full browser automation via the `agent-browser` skill (Chromium-based)
+- **Phone calls** — Outbound voice calls via RetellAI integration with call analysis webhooks
 - **Multi-group** — Multiple Discord channels/servers, each with isolated context and memory
-- **Admin controls** — Privileged admin groups with extra tools: deploy, restart, register channels, view stats
+- **Admin controls** — Privileged admin groups with extra tools: deploy, restart, register channels, phone calls, view stats
 
 ## Architecture
 
@@ -39,7 +40,8 @@ A self-hosted Discord AI assistant powered by Anthropic's Claude Agent SDK. Each
 │                      │                    │              │
 │                 Scheduler Loop       IPC Watcher         │
 │                      │                    │              │
-│                 SQLite (messages.db)       │              │
+│                 SQLite (messages.db)  Webhook Server     │
+│                                      (Composio+RetellAI)│
 │                                           ▼              │
 ├───────────────────── CONTAINER (Docker) ─────────────────┤
 │                                                          │
@@ -112,6 +114,12 @@ ASSISTANT_NAME=Andy         # The @mention trigger word
 WEBHOOK_PORT=3456
 COMPOSIO_WEBHOOK_SECRET=
 
+# RetellAI phone calls (optional)
+RETELL_API_KEY=               # RetellAI API key
+RETELL_AGENT_ID=              # RetellAI agent ID
+RETELL_FROM_NUMBER=           # E.164 format (e.g. +14157774444)
+RETELL_WEBHOOK_GROUP=         # Group folder for call analysis events
+
 # Container tuning (optional)
 CONTAINER_IMAGE=nanoclawbster-agent:latest
 CONTAINER_TIMEOUT=1800000     # 30 min
@@ -141,11 +149,10 @@ Skills are prompt files that give agents specialized capabilities. They live in 
 | Skill | Description |
 |-------|-------------|
 | `agent-browser` | Full browser automation — research, scraping, form filling, screenshots |
-| `self-improve` | Write features, fix bugs, and create PRs for NanoClawbster itself |
+| `self-improve` | Write features, fix bugs, and create PRs for NanoClawbster itself (admin-only) |
 | `mcp-builder` | Build and register custom MCP servers for new integrations |
-| `daily-memory` | Write daily memory journal entries summarizing conversations |
 
-Skills are loaded automatically based on system instructions. The `agent-browser` skill provides a `agent-browser` CLI tool (Chromium-based) available inside every container.
+Skills are loaded automatically based on system instructions. The `agent-browser` skill provides an `agent-browser` CLI tool (Chromium-based) available inside every container.
 
 ## Agent Tools
 
@@ -153,13 +160,13 @@ Skills are loaded automatically based on system instructions. The `agent-browser
 
 | Tool | Description |
 |------|-------------|
-| `send_message` | Send a message to the group |
+| `send_message` | Send a message to the group (supports file attachments) |
+| `ask_user` | Pause mid-task and wait for user input before continuing |
 | `schedule_task` | Schedule recurring or one-time tasks (cron, interval, once) |
 | `list_tasks` | View scheduled tasks for this group |
 | `pause_task` | Pause a scheduled task |
 | `resume_task` | Resume a paused task |
 | `cancel_task` | Delete a scheduled task |
-| `ask_user` | Pause mid-task and wait for user input before continuing |
 
 ### Admin-Only Tools
 
@@ -169,8 +176,9 @@ Skills are loaded automatically based on system instructions. The `agent-browser
 | `get_stats` | View usage and system statistics |
 | `restart_self` | Restart the host service |
 | `pull_and_deploy` | Pull from GitHub, build, rebuild Docker if needed, restart |
-| `test_container_build` | Test-build the Docker image without deploying |
+| `test_container_build` | Test-build the Docker image from the group's dev workspace |
 | `delegate_task` | Delegate a task to a clean-context coding agent |
+| `make_phone_call` | Make outbound voice calls via RetellAI |
 
 ## Scheduled Tasks
 
@@ -206,7 +214,9 @@ nanoclawbster/
 │   ├── router.ts                # Message formatting and outbound routing
 │   ├── container-runner.ts      # Spawns agent containers with mounts
 │   ├── task-scheduler.ts        # Runs scheduled tasks when due
-│   └── db.ts                   # SQLite operations
+│   ├── webhook-server.ts        # Composio + RetellAI webhook receiver
+│   ├── db.ts                    # SQLite operations
+│   └── config.ts                # Configuration loader (.env)
 ├── container/
 │   ├── Dockerfile               # Agent container image (node user, Claude Code CLI)
 │   ├── build.sh                 # Container build script
@@ -214,12 +224,18 @@ nanoclawbster/
 │   │   ├── index.ts             # Entry point (query loop, IPC polling, session resume)
 │   │   └── ipc-mcp-stdio.ts     # Stdio MCP server for host communication
 │   └── skills/                  # Skill prompt files (agent-browser, self-improve, etc.)
+├── data/
+│   ├── dev/{group}/             # Per-group git clones (mounted at /workspace/dev)
+│   ├── ipc/{group}/             # IPC message queues (JSON files)
+│   └── sessions/{group}/        # Session state and agent-runner source
 ├── groups/
 │   ├── CLAUDE.md                # Global memory (all groups)
 │   └── {group-name}/
 │       ├── CLAUDE.md            # Group-specific memory
 │       └── logs/                # Container execution logs
-├── docs/                        # Architecture docs (SPEC.md, SECURITY.md, etc.)
+├── store/
+│   └── messages.db              # SQLite (messages, sessions, groups, tasks)
+├── docs/                        # Architecture docs (REQUIREMENTS.md, SECURITY.md)
 ├── .env.example                 # Configuration reference
 └── README.md                    # This file
 ```
