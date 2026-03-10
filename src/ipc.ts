@@ -771,19 +771,19 @@ export async function processTaskIpc(
         break;
       }
       const webhookPrompt = [
-        `A webhook event was received from Composio.`,
-        `Trigger: ${data.triggerName}`,
-        `Payload:\n${JSON.stringify(data.webhookPayload, null, 2)}`,
-        ``,
-        `Based on this event, decide what to do:`,
-        `- If it's noteworthy (e.g. a PR was merged, a build failed, something important happened), send the user a concise notification using the send_message tool.`,
-        `- If it requires action (e.g. a PR merge means a deploy may be needed), take or offer to take that action via send_message.`,
-        `- If it's noise (e.g. a synchronize event, a bot commit), do nothing — do not call send_message, do not output any text.`,
-        ``,
-        `CRITICAL: The ONLY way to notify the user is via the send_message tool. Any plain text you output goes directly to the user as a message.`,
-        `If you decide this event is not worth notifying about, output nothing at all — not even "staying silent" or any explanation.`,
-        `Wrap all internal reasoning in <internal> tags so it is not sent to the user.`,
-      ].join('\n');
+            `A webhook event was received from Composio.`,
+            `Trigger: ${data.triggerName}`,
+            `Payload:\n${JSON.stringify(data.webhookPayload, null, 2)}`,
+            ``,
+            `Based on this event, decide what to do:`,
+            `- If it's noteworthy (e.g. a PR was merged, a build failed, something important happened), send the user a concise notification using the send_message tool.`,
+            `- If it requires action (e.g. a PR merge means a deploy may be needed), take or offer to take that action via send_message.`,
+            `- If it's noise (e.g. a synchronize event, a bot commit), do nothing — do not call send_message, do not output any text.`,
+            ``,
+            `CRITICAL: The ONLY way to notify the user is via the send_message tool. Any plain text you output goes directly to the user as a message.`,
+            `If you decide this event is not worth notifying about, output nothing at all — not even "staying silent" or any explanation.`,
+            `Wrap all internal reasoning in <internal> tags so it is not sent to the user.`,
+          ].join('\n');
       const webhookTaskId = `webhook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       createTask({
         id: webhookTaskId,
