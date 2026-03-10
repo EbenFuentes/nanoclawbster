@@ -756,6 +756,91 @@ export async function processTaskIpc(
       break;
     }
 
+    case 'retell_call': {
+      if (!isAdmin) {
+        logger.warn({ sourceGroup }, 'Unauthorized retell_call attempt blocked');
+        break;
+      }
+      if (!data.chatJid || !data.webhookPayload) {
+        logger.warn({ data }, 'Invalid retell_call — missing chatJid or webhookPayload');
+        break;
+      }
+      const retellGroup = registeredGroups[data.chatJid];
+      if (!retellGroup) {
+        logger.warn({ chatJid: data.chatJid }, 'retell_call: group not registered');
+        break;
+      }
+
+      const call = data.webhookPayload as Record<string, unknown>;
+      const direction = String(call['direction'] ?? 'unknown');
+      const fromNumber = String(call['from_number'] ?? 'unknown');
+      const toNumber = String(call['to_number'] ?? 'unknown');
+      const durationMs = Number(call['duration_ms'] ?? 0);
+      const durationStr = durationMs > 0
+        ? `${Math.floor(durationMs / 60000)}m ${Math.floor((durationMs % 60000) / 1000)}s`
+        : 'unknown';
+      const disconnectReason = call['disconnection_reason'] ? String(call['disconnection_reason']) : undefined;
+      const callAnalysis = call['call_analysis'] as Record<string, unknown> | undefined;
+
+      // Format transcript: prefer transcript_object for speaker labels, fall back to plain transcript
+      let transcriptText = '';
+      const transcriptObj = call['transcript_object'] as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(transcriptObj) && transcriptObj.length > 0) {
+        transcriptText = transcriptObj
+          .map((t) => `${String(t['role'] ?? 'unknown')}: ${String(t['content'] ?? '')}`)
+          .join('\n');
+      } else if (call['transcript']) {
+        transcriptText = String(call['transcript']);
+      }
+
+      const retellPromptParts = [
+        `A phone call just ${direction === 'inbound' ? 'came in' : 'was completed'}.`,
+        ``,
+        `**Call Details:**`,
+        `- Direction: ${direction}`,
+        `- From: ${fromNumber}`,
+        `- To: ${toNumber}`,
+        `- Duration: ${durationStr}`,
+      ];
+      if (disconnectReason) retellPromptParts.push(`- Disconnect reason: ${disconnectReason}`);
+      if (callAnalysis) {
+        retellPromptParts.push(`- Call analysis: ${JSON.stringify(callAnalysis)}`);
+      }
+      retellPromptParts.push('');
+      if (transcriptText) {
+        retellPromptParts.push(`**Transcript:**`, transcriptText);
+      } else {
+        retellPromptParts.push(`(No transcript available)`);
+      }
+      retellPromptParts.push(
+        ``,
+        `Based on this call:`,
+        `- If the caller made any requests or asked for something, take action on it.`,
+        `- Otherwise, send a brief summary of the call using the send_message tool.`,
+        ``,
+        `CRITICAL: The ONLY way to notify the user is via the send_message tool. Any plain text you output goes directly to the user as a message.`,
+        `Wrap all internal reasoning in <internal> tags so it is not sent to the user.`,
+      );
+      const retellPrompt = retellPromptParts.join('\n');
+
+      const retellTaskId = `retell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      createTask({
+        id: retellTaskId,
+        group_folder: retellGroup.folder,
+        chat_jid: data.chatJid,
+        prompt: retellPrompt,
+        schedule_type: 'once',
+        schedule_value: new Date().toISOString(),
+        context_mode: 'isolated',
+        task_type: 'webhook',
+        next_run: new Date().toISOString(),
+        status: 'active',
+        created_at: new Date().toISOString(),
+      });
+      logger.info({ taskId: retellTaskId, direction, fromNumber }, 'Retell call task created');
+      break;
+    }
+
     case 'webhook_event': {
       if (!isAdmin) {
         logger.warn({ sourceGroup }, 'Unauthorized webhook_event attempt blocked');

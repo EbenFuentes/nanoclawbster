@@ -9,6 +9,8 @@ import {
   IDLE_TIMEOUT,
   MAX_SESSION_FILE_SIZE,
   POLL_INTERVAL,
+  RETELL_API_KEY,
+  RETELL_WEBHOOK_GROUP,
   TRIGGER_PATTERN,
   WEBHOOK_PORT,
 } from './config.js';
@@ -573,6 +575,22 @@ function writeWebhookEventTask(triggerName: string, payload: unknown, adminGroup
   }
 }
 
+function writeRetellCallTask(event: string, call: unknown, adminGroup: RegisteredGroup, targetJid: string): void {
+  const tasksDir = path.join(DATA_DIR, 'ipc', adminGroup.folder, 'tasks');
+  try {
+    fs.mkdirSync(tasksDir, { recursive: true });
+    const filename = `retell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
+    fs.writeFileSync(
+      path.join(tasksDir, filename),
+      JSON.stringify({ type: 'retell_call', chatJid: targetJid, event, webhookPayload: call }),
+      'utf-8',
+    );
+    logger.info({ filename, event, targetJid }, 'Retell call IPC task written');
+  } catch (err) {
+    logger.error({ err }, 'Failed to write Retell call IPC task');
+  }
+}
+
 async function main(): Promise<void> {
   ensureContainerSystemRunning();
   initDatabase();
@@ -633,18 +651,48 @@ async function main(): Promise<void> {
     writeGroupsSnapshot: (gf, im, ag, rj) => writeGroupsSnapshot(gf, im, ag, rj),
   });
 
-  // Start Composio webhook server for proactive event notifications
-  if (WEBHOOK_PORT && COMPOSIO_WEBHOOK_SECRET) {
-    startWebhookServer(WEBHOOK_PORT, COMPOSIO_WEBHOOK_SECRET, (triggerName, payload) => {
-      const adminEntry = Object.entries(registeredGroups).find(([, g]) => g.isAdmin === true);
-      if (!adminEntry) {
-        logger.warn('Webhook received but no admin group registered — cannot deliver notification');
-        return;
-      }
-      writeWebhookEventTask(triggerName, payload, adminEntry[1], adminEntry[0]);
+  // Start webhook server for proactive event notifications (Composio and/or RetellAI)
+  const hasComposio = !!COMPOSIO_WEBHOOK_SECRET;
+  const hasRetell = true; // Always enable Retell route — signature verification is optional
+  if (WEBHOOK_PORT && (hasComposio || hasRetell)) {
+    startWebhookServer({
+      port: WEBHOOK_PORT,
+      composio: hasComposio ? {
+        secret: COMPOSIO_WEBHOOK_SECRET,
+        onEvent: (triggerName, payload) => {
+          const adminEntry = Object.entries(registeredGroups).find(([, g]) => g.isAdmin === true);
+          if (!adminEntry) {
+            logger.warn('Webhook received but no admin group registered — cannot deliver notification');
+            return;
+          }
+          writeWebhookEventTask(triggerName, payload, adminEntry[1], adminEntry[0]);
+        },
+      } : undefined,
+      retell: {
+        apiKey: RETELL_API_KEY || undefined,
+        onEvent: (event, call) => {
+          // Find admin group (IPC files go into admin dir)
+          const adminEntry = Object.entries(registeredGroups).find(([, g]) => g.isAdmin === true);
+          if (!adminEntry) {
+            logger.warn('Retell webhook received but no admin group registered');
+            return;
+          }
+          // Resolve target group from RETELL_WEBHOOK_GROUP, fall back to admin
+          let targetJid = adminEntry[0];
+          if (RETELL_WEBHOOK_GROUP) {
+            const targetEntry = Object.entries(registeredGroups).find(([, g]) => g.folder === RETELL_WEBHOOK_GROUP);
+            if (targetEntry) {
+              targetJid = targetEntry[0];
+            } else {
+              logger.warn({ folder: RETELL_WEBHOOK_GROUP }, 'RETELL_WEBHOOK_GROUP folder not found, falling back to admin');
+            }
+          }
+          writeRetellCallTask(event, call, adminEntry[1], targetJid);
+        },
+      },
     });
   } else {
-    logger.info('Webhook server not started (WEBHOOK_PORT or COMPOSIO_WEBHOOK_SECRET not configured)');
+    logger.info('Webhook server not started (WEBHOOK_PORT not configured)');
   }
 
   queue.setProcessMessagesFn(processGroupMessages);
