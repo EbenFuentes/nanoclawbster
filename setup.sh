@@ -159,3 +159,7 @@ fi
 if [ "$DEPS_OK" = "false" ] || [ "$NATIVE_OK" = "false" ]; then
   exit 1
 fi
+
+# Chain into interactive wizard
+log "Launching setup wizard"
+exec npx tsx setup/wizard.ts

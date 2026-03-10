@@ -80,26 +80,23 @@ A self-hosted Discord AI assistant powered by Anthropic's Claude Agent SDK. Each
 ```bash
 git clone https://github.com/sskarz/nanoclawbster.git
 cd nanoclawbster
-cp .env.example .env
-# Edit .env — set DISCORD_BOT_TOKEN and ANTHROPIC_API_KEY
-claude
+bash setup.sh
 ```
 
-Then in Claude Code, run:
+The setup wizard will:
+1. Install Node.js dependencies
+2. Check/install Docker
+3. Prompt for your Discord bot token and Claude API key
+4. Build the agent container image
+5. Auto-register your Discord DM as the admin channel
+6. Install and start the background service (systemd on Linux, launchd on macOS)
+
+Once running, DM your bot on Discord to test:
 ```
-/setup
+@Andy what can you do?
 ```
 
-The `/setup` skill will:
-1. Check your environment (Node, Docker, credentials)
-2. Build the agent container image
-3. Configure and start the background service (launchd on macOS, systemd on Linux)
-4. Register your first Discord channel as the admin group
-
-Once running, invite your bot to a Discord server and @mention it:
-```
-@Andy what's on my calendar today?
-```
+> **Power users:** You can also run `/setup` inside [Claude Code](https://claude.ai/code) for step-by-step control.
 
 ## Configuration
 

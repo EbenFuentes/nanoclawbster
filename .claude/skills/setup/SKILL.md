@@ -1,13 +1,34 @@
 ---
 name: setup
-description: Run initial NanoClawbster setup. Use when user wants to install dependencies, authenticate WhatsApp, register their main channel, or start the background services. Triggers on "setup", "install", "configure nanoclawbster", or first-time setup requests.
+description: Run initial NanoClawbster setup. Use when user wants to install dependencies, configure Discord, register their admin channel, or start the background service. Triggers on "setup", "install", "configure nanoclawbster", or first-time setup requests.
 ---
 
 # NanoClawbster Setup
 
-Run setup steps automatically. Only pause when user action is required (WhatsApp authentication, configuration choices). Setup uses `bash setup.sh` for bootstrap, then `npx tsx setup/index.ts --step <name>` for all other steps. Steps emit structured status blocks to stdout. Verbose logs go to `logs/setup.log`.
+## Primary Path: bash setup.sh
 
-**Principle:** When something is broken or missing, fix it. Don't tell the user to go fix it themselves unless it genuinely requires their manual action (e.g. scanning a QR code, pasting a secret token). If a dependency is missing, install it. If a service won't start, diagnose and repair. Ask the user for permission when needed, then do the work.
+For new installations, the recommended approach is a single command:
+
+```bash
+bash setup.sh
+```
+
+This runs the bootstrap (Node.js + npm install) then automatically launches an interactive wizard that handles:
+
+1. **Docker** — detects, installs, or starts Docker
+2. **Credentials** — prompts for Discord bot token, Claude auth (API key or OAuth), and assistant name
+3. **Container image** — builds the agent container with streamed output
+4. **Admin channel** — auto-detects the bot owner via Discord API, creates a DM channel, and registers it as the admin group
+5. **Service** — builds TypeScript and installs/starts the system service (systemd on Linux, launchd on macOS, nohup fallback for WSL)
+6. **Verification** — confirms everything is running and prints a summary
+
+The wizard detects existing state (`.env`, registered groups, running service) at each step and offers to skip or reconfigure.
+
+## Secondary Path: Claude Code Skill
+
+For power users or troubleshooting individual steps, use `npx tsx setup/index.ts --step <name>` with the steps below. Steps emit structured status blocks to stdout. Verbose logs go to `logs/setup.log`.
+
+**Principle:** When something is broken or missing, fix it. Don't tell the user to go fix it themselves unless it genuinely requires their manual action (e.g. pasting a secret token). If a dependency is missing, install it. If a service won't start, diagnose and repair. Ask the user for permission when needed, then do the work.
 
 **UX Note:** Use `AskUserQuestion` for all user-facing questions.
 
@@ -27,9 +48,8 @@ Run `bash setup.sh` and parse the status block.
 
 Run `npx tsx setup/index.ts --step environment` and parse the status block.
 
-- If HAS_AUTH=true → note that WhatsApp auth exists, offer to skip step 5
 - If HAS_REGISTERED_GROUPS=true → note existing config, offer to skip or reconfigure
-- Record APPLE_CONTAINER and DOCKER values for step 3
+- Record DOCKER value for step 3
 
 ## 3. Container Runtime
 
@@ -83,53 +103,30 @@ AskUserQuestion: Claude subscription (Pro/Max) vs Anthropic API key?
 
 **API key:** Tell user to add `ANTHROPIC_API_KEY=<key>` to `.env`.
 
-## 5. WhatsApp Authentication
+## 5. Discord Bot Token (No Script)
 
-If HAS_AUTH=true, confirm: keep or re-authenticate?
+If `.env` already has `DISCORD_BOT_TOKEN`, confirm with user: keep or reconfigure?
 
-**Choose auth method based on environment (from step 2):**
+If missing, tell user to create a Discord bot:
+1. Go to https://discord.com/developers/applications
+2. Create a new application → go to Bot tab → Reset Token → copy
+3. Enable Privileged Gateway Intents: Message Content, Server Members, Presence
+4. OAuth2 → URL Generator → select "bot" scope → Send Messages, Read Message History, Use Slash Commands
+5. Invite the bot to their server using the generated URL
+6. Paste the token into `.env` as `DISCORD_BOT_TOKEN=<token>`
 
-If IS_HEADLESS=true AND IS_WSL=false → AskUserQuestion: Pairing code (recommended) vs QR code in terminal?
-Otherwise (macOS, desktop Linux, or WSL) → AskUserQuestion: QR code in browser (recommended) vs pairing code vs QR code in terminal?
+## 6. Register Channel
 
-- **QR browser:** `npx tsx setup/index.ts --step whatsapp-auth -- --method qr-browser` (Bash timeout: 150000ms)
-- **Pairing code:** Ask for phone number first. `npx tsx setup/index.ts --step whatsapp-auth -- --method pairing-code --phone NUMBER` (Bash timeout: 150000ms). Display PAIRING_CODE.
-- **QR terminal:** `npx tsx setup/index.ts --step whatsapp-auth -- --method qr-terminal`. Tell user to run `npm run auth` in another terminal.
+Run `npx tsx setup/index.ts --step register -- --jid "dc:CHANNEL_ID" --name "channel-name" --trigger "@TriggerWord" --folder "main"` plus `--no-trigger-required` if DM, `--is-admin` for the admin channel, `--assistant-name "Name"` if not Andy.
 
-**If failed:** qr_timeout → re-run. logged_out → delete `store/auth/` and re-run. 515 → re-run. timeout → ask user, offer retry.
-
-## 6. Configure Trigger and Channel Type
-
-Get bot's WhatsApp number: `node -e "const c=require('./store/auth/creds.json');console.log(c.me.id.split(':')[0].split('@')[0])"`
-
-AskUserQuestion: Shared number or dedicated? → AskUserQuestion: Trigger word? → AskUserQuestion: Main channel type?
-
-**Shared number:** Self-chat (recommended) or Solo group
-**Dedicated number:** DM with bot (recommended) or Solo group with bot
-
-## 7. Sync and Select Group (If Group Channel)
-
-**Personal chat:** JID = `NUMBER@s.whatsapp.net`
-**DM with bot:** Ask for bot's number, JID = `NUMBER@s.whatsapp.net`
-
-**Group:**
-1. `npx tsx setup/index.ts --step groups` (Bash timeout: 60000ms)
-2. BUILD=failed → fix TypeScript, re-run. GROUPS_IN_DB=0 → check logs.
-3. `npx tsx setup/index.ts --step groups -- --list` for pipe-separated JID|name lines.
-4. Present candidates as AskUserQuestion (names only, not JIDs).
-
-## 8. Register Channel
-
-Run `npx tsx setup/index.ts --step register -- --jid "JID" --name "main" --trigger "@TriggerWord" --folder "main"` plus `--no-trigger-required` if personal/DM/solo, `--assistant-name "Name"` if not Andy.
-
-## 9. Mount Allowlist
+## 7. Mount Allowlist
 
 AskUserQuestion: Agent access to external directories?
 
 **No:** `npx tsx setup/index.ts --step mounts -- --empty`
 **Yes:** Collect paths/permissions. `npx tsx setup/index.ts --step mounts -- --json '{"allowedRoots":[...],"blockedPatterns":[],"nonMainReadOnly":true}'`
 
-## 10. Start Service
+## 8. Start Service
 
 If service already running: unload first.
 - macOS: `launchctl unload ~/Library/LaunchAgents/com.nanoclawbster.plist`
@@ -159,28 +156,25 @@ Replace `USERNAME` with the actual username (from `whoami`). Run the two `sudo` 
 - Linux: check `systemctl --user status nanoclawbster`.
 - Re-run the service step after fixing.
 
-## 11. Verify
+## 9. Verify
 
 Run `npx tsx setup/index.ts --step verify` and parse the status block.
 
 **If STATUS=failed, fix each:**
 - SERVICE=stopped → `npm run build`, then restart: `launchctl kickstart -k gui/$(id -u)/com.nanoclawbster` (macOS) or `systemctl --user restart nanoclawbster` (Linux) or `bash start-nanoclawbster.sh` (WSL nohup)
-- SERVICE=not_found → re-run step 10
+- SERVICE=not_found → re-run step 8
 - CREDENTIALS=missing → re-run step 4
-- WHATSAPP_AUTH=not_found → re-run step 5
-- REGISTERED_GROUPS=0 → re-run steps 7-8
+- REGISTERED_GROUPS=0 → re-run step 6
 - MOUNT_ALLOWLIST=missing → `npx tsx setup/index.ts --step mounts -- --empty`
 
 Tell user to test: send a message in their registered chat. Show: `tail -f logs/nanoclawbster.log`
 
 ## Troubleshooting
 
-**Service not starting:** Check `logs/nanoclawbster.error.log`. Common: wrong Node path (re-run step 10), missing `.env` (step 4), missing auth (step 5).
+**Service not starting:** Check `logs/nanoclawbster.error.log`. Common: wrong Node path (re-run step 8), missing `.env` (step 4).
 
-**Container agent fails ("Claude Code process exited with code 1"):** Ensure the container runtime is running — `open -a Docker` (macOS Docker), `container system start` (Apple Container), or `sudo systemctl start docker` (Linux). Check container logs in `groups/main/logs/container-*.log`.
+**Container agent fails ("Claude Code process exited with code 1"):** Ensure Docker is running — `open -a Docker` (macOS Docker), `container system start` (Apple Container), or `sudo systemctl start docker` (Linux). Check container logs in `groups/main/logs/container-*.log`.
 
-**No response to messages:** Check trigger pattern. Main channel doesn't need prefix. Check DB: `npx tsx setup/index.ts --step verify`. Check `logs/nanoclawbster.log`.
-
-**WhatsApp disconnected:** `npm run auth` then rebuild and restart: `npm run build && launchctl kickstart -k gui/$(id -u)/com.nanoclawbster` (macOS) or `systemctl --user restart nanoclawbster` (Linux).
+**No response to messages:** Check trigger pattern. Admin DM doesn't need prefix. Check DB: `npx tsx setup/index.ts --step verify`. Check `logs/nanoclawbster.log`.
 
 **Unload service:** macOS: `launchctl unload ~/Library/LaunchAgents/com.nanoclawbster.plist` | Linux: `systemctl --user stop nanoclawbster`
