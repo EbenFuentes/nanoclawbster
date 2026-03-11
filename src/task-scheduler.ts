@@ -154,6 +154,7 @@ async function runTask(
         }
         if (streamedOutput.status === 'success') {
           deps.queue.notifyIdle(task.chat_jid);
+          scheduleClose(); // ensure container closes even when result is null (e.g. tool-only responses)
         }
         if (streamedOutput.status === 'error') {
           error = streamedOutput.error || 'Unknown error';
