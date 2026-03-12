@@ -9,9 +9,7 @@ When a user asks about a League of Legends champion build, look up the latest da
 
 ## How to look up builds
 
-**IMPORTANT: Use WebSearch first — it's fast and reliable. Do NOT use agent-browser unless WebSearch fails to find build data.**
-
-1. Normalize the champion name (e.g. "Lee Sin" → "lee sin", "Miss Fortune" → "miss fortune")
+1. Normalize the champion name (e.g. "Lee Sin" → "lee-sin", "Miss Fortune" → "miss-fortune")
 2. Search for the build:
    ```
    WebSearch: "u.gg {champion} {role} build current patch"
@@ -19,24 +17,31 @@ When a user asks about a League of Legends champion build, look up the latest da
 3. Use `WebFetch` on the u.gg result URL to extract build details
 4. If WebFetch returns insufficient data (u.gg is client-rendered), use the search result snippets directly — they often contain the key info (runes, items, win rate)
 
-## Only use agent-browser as a last resort
-
-If WebSearch + WebFetch don't give enough detail, then use the browser:
-```bash
-agent-browser open "https://u.gg/lol/champions/{champion}/build"
-agent-browser snapshot
-```
-Limit browser to 3-4 snapshots max. Extract what you can and respond — don't loop.
-
 ## URLs
 
 - Build: `https://u.gg/lol/champions/{champion}/build`
 - Role-specific: append `?role={role}` (support, jungle, mid, adc, top)
 - Counters: `https://u.gg/lol/champions/{champion}/counters`
 
+## Screenshot (REQUIRED — always do this)
+
+Always take a full-page screenshot of the u.gg build page and include it with your response. Do this every time, no exceptions:
+
+```bash
+mkdir -p /workspace/ipc/attachments/
+agent-browser open "https://u.gg/lol/champions/{champion}/build"
+agent-browser wait --load networkidle
+agent-browser wait 3000
+agent-browser screenshot --full /workspace/ipc/attachments/{champion}-build.png
+```
+
+Then send via `send_message` with the screenshot attached:
+- `text`: the build summary
+- `files`: `["{champion}-build.png"]`
+
 ## Response format
 
-Send the response via `send_message` promptly. Present the build cleanly:
+Send the response via `send_message` with the screenshot attached. Present the build cleanly in the text:
 - **Runes:** Primary tree + keystones, secondary tree + runes, stat shards
 - **Summoner spells**
 - **Items:** Starting → Core → Situational
